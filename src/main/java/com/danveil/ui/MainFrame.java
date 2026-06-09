@@ -20,16 +20,20 @@ public class MainFrame extends JFrame {
     private JProgressBar progressBar;
 
     public MainFrame() {
-        setTitle("PPTX to PDF Converter");
-        setSize(540, 260);
+        setTitle("PPTX2PDF Converter");
+        setSize(580, 340);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setResizable(false);
 
-        initComponents();
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.addTab("PPTX to PDF", buildConvertPanel());
+        tabs.addTab("Merge PDFs", new MergePanel());
+
+        add(tabs);
     }
 
-    private void initComponents() {
+    private JPanel buildConvertPanel() {
 
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
@@ -37,7 +41,6 @@ public class MainFrame extends JFrame {
         c.insets = new Insets(6, 6, 6, 6);
         c.fill = GridBagConstraints.HORIZONTAL;
 
-        // --- Input row ---
         c.gridx = 0; c.gridy = 0; c.weightx = 0;
         panel.add(new JLabel("Input PPTX:"), c);
 
@@ -51,7 +54,6 @@ public class MainFrame extends JFrame {
         c.gridx = 2; c.weightx = 0;
         panel.add(browseInput, c);
 
-        // --- Output row ---
         c.gridx = 0; c.gridy = 1; c.weightx = 0;
         panel.add(new JLabel("Output PDF:"), c);
 
@@ -65,7 +67,6 @@ public class MainFrame extends JFrame {
         c.gridx = 2; c.weightx = 0;
         panel.add(browseOutput, c);
 
-        // --- Progress bar ---
         progressBar = new JProgressBar(0, 100);
         progressBar.setStringPainted(true);
         progressBar.setString("Idle");
@@ -74,7 +75,6 @@ public class MainFrame extends JFrame {
         c.fill = GridBagConstraints.HORIZONTAL;
         panel.add(progressBar, c);
 
-        // --- Convert button ---
         convertButton = new JButton("Convert to PDF");
         convertButton.setEnabled(false);
         convertButton.addActionListener(e -> startConvert());
@@ -83,13 +83,12 @@ public class MainFrame extends JFrame {
         c.anchor = GridBagConstraints.CENTER;
         panel.add(convertButton, c);
 
-        // --- Status label ---
         statusLabel = new JLabel("Select a PPTX file to begin.", SwingConstants.CENTER);
         statusLabel.setForeground(Color.GRAY);
         c.gridy = 4;
         panel.add(statusLabel, c);
 
-        add(panel);
+        return panel;
     }
 
     private void browseInput() {
@@ -151,7 +150,6 @@ public class MainFrame extends JFrame {
             protected Void doInBackground() throws Exception {
                 PptxToPdfConverter converter = new PptxToPdfConverter();
                 converter.convert(input, output, (current, total) -> {
-                    // Publish progress to EDT
                     publish(new int[]{current, total});
                 });
                 return null;
@@ -159,7 +157,6 @@ public class MainFrame extends JFrame {
 
             @Override
             protected void process(java.util.List<int[]> chunks) {
-                // Called on EDT — safe to update GUI here
                 int[] latest = chunks.get(chunks.size() - 1);
                 int current = latest[0];
                 int total   = latest[1];
@@ -198,6 +195,6 @@ public class MainFrame extends JFrame {
     private void showError(String message) {
         statusLabel.setText("Error: " + message);
         statusLabel.setForeground(Color.RED);
-        JOptionPane.showMessageDialog(this, message, "Conversion Error", JOptionPane.ERROR_MESSAGE);
+        JOptionPane.showMessageDialog(this, message, "Error", JOptionPane.ERROR_MESSAGE);
     }
 }
