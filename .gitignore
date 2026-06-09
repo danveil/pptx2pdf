@@ -1,0 +1,7 @@
+target/
+logs/
+*.log
+*.class
+release/
+input/
+output/
