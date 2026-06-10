@@ -29,7 +29,7 @@ public class ConverterPanel extends JPanel {
         VALID_TARGETS.put(PPTX, List.of(PDF));
         VALID_TARGETS.put(DOCX, List.of(PDF));
         VALID_TARGETS.put(XLSX, List.of(PDF));
-        VALID_TARGETS.put(PDF,  List.of(DOCX, JPG, PNG));
+        VALID_TARGETS.put(PDF,  List.of(DOCX, JPG, PNG, "MD"));
         VALID_TARGETS.put(JPG,  List.of(PDF));
         VALID_TARGETS.put(PNG,  List.of(PDF));
     }
@@ -102,7 +102,7 @@ public class ConverterPanel extends JPanel {
         formatPanel.add(new JLabel("To:"), fc);
 
         JPanel toPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        for (String fmt : new String[]{PDF, DOCX, JPG, PNG}) {
+        for (String fmt : new String[]{PDF, DOCX, JPG, PNG, "MD"}) {
             JToggleButton btn = makeToggleButton(fmt);
             btn.addActionListener(e -> {
                 selectedTo = fmt;
@@ -347,6 +347,12 @@ public class ConverterPanel extends JPanel {
                             new PdfToDocxConverter().convert(input, out);
                             publish(new int[]{idx, total, (int)((idx / (double) total) * 100)});
                         }
+
+                        case "PDF_MD" -> {
+                            String out = outputDir + File.separator + baseName + ".md";
+                            new PdfToMarkdownConverter().convert(input, out);
+                            publish(new int[]{idx, total, (int)((idx / (double) total) * 100)});
+}
 
                         default -> throw new IllegalArgumentException(
                                 "Unsupported conversion: " + from + " → " + to);

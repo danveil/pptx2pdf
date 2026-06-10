@@ -44,6 +44,7 @@ A desktop app to convert, merge, and transform documents — fully offline, no c
 | PDF | DOCX |
 | PDF | JPG |
 | PDF | PNG |
+| PDF | MD |
 
 ## Build from Source
 
