@@ -8,20 +8,22 @@ import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.io.File;
+import java.util.List;
 
 public class MainFrame extends JFrame {
 
     private static final Logger log = LoggerFactory.getLogger(MainFrame.class);
 
-    private JTextField inputField;
-    private JTextField outputField;
+    private DefaultListModel<String> convertListModel;
+    private JList<String> convertFileList;
+    private JTextField convertOutputDirField;
     private JButton convertButton;
-    private JLabel statusLabel;
-    private JProgressBar progressBar;
+    private JLabel convertStatusLabel;
+    private JProgressBar convertProgressBar;
 
     public MainFrame() {
         setTitle("PPTX2PDF Converter");
-        setSize(580, 340);
+        setSize(640, 460);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setResizable(false);
@@ -29,160 +31,173 @@ public class MainFrame extends JFrame {
         JTabbedPane tabs = new JTabbedPane();
         tabs.addTab("PPTX to PDF", buildConvertPanel());
         tabs.addTab("Merge PDFs", new MergePanel());
+        tabs.addTab("All Converters", new ConverterPanel());
 
         add(tabs);
     }
 
     private JPanel buildConvertPanel() {
-
-        JPanel panel = new JPanel(new GridBagLayout());
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
+
+        convertListModel = new DefaultListModel<>();
+        convertFileList  = new JList<>(convertListModel);
+        convertFileList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+
+        JScrollPane scrollPane = new JScrollPane(convertFileList);
+        scrollPane.setBorder(BorderFactory.createTitledBorder("PPTX Files to Convert"));
+        scrollPane.setPreferredSize(new Dimension(0, 160));
+        panel.add(scrollPane, BorderLayout.CENTER);
+
+        JPanel listButtons = new JPanel(new GridLayout(2, 1, 0, 6));
+        listButtons.setBorder(BorderFactory.createEmptyBorder(20, 0, 0, 0));
+
+        JButton addButton    = new JButton("Add PPTX");
+        JButton removeButton = new JButton("Remove");
+
+        addButton.addActionListener(e -> addPptxFiles());
+        removeButton.addActionListener(e -> {
+            int index = convertFileList.getSelectedIndex();
+            if (index != -1) { convertListModel.remove(index); refreshConvertButton(); }
+        });
+
+        listButtons.add(addButton);
+        listButtons.add(removeButton);
+        panel.add(listButtons, BorderLayout.EAST);
+
+        JPanel bottomPanel = new JPanel(new GridBagLayout());
         GridBagConstraints c = new GridBagConstraints();
-        c.insets = new Insets(6, 6, 6, 6);
-        c.fill = GridBagConstraints.HORIZONTAL;
+        c.insets = new Insets(6, 4, 6, 4);
+        c.fill   = GridBagConstraints.HORIZONTAL;
 
         c.gridx = 0; c.gridy = 0; c.weightx = 0;
-        panel.add(new JLabel("Input PPTX:"), c);
+        bottomPanel.add(new JLabel("Output Folder:"), c);
 
-        inputField = new JTextField(28);
-        inputField.setEditable(false);
+        convertOutputDirField = new JTextField(28);
+        convertOutputDirField.setEditable(false);
         c.gridx = 1; c.weightx = 1;
-        panel.add(inputField, c);
-
-        JButton browseInput = new JButton("Browse");
-        browseInput.addActionListener(e -> browseInput());
-        c.gridx = 2; c.weightx = 0;
-        panel.add(browseInput, c);
-
-        c.gridx = 0; c.gridy = 1; c.weightx = 0;
-        panel.add(new JLabel("Output PDF:"), c);
-
-        outputField = new JTextField(28);
-        outputField.setEditable(false);
-        c.gridx = 1; c.weightx = 1;
-        panel.add(outputField, c);
+        bottomPanel.add(convertOutputDirField, c);
 
         JButton browseOutput = new JButton("Browse");
-        browseOutput.addActionListener(e -> browseOutput());
+        browseOutput.addActionListener(e -> browseOutputDir());
         c.gridx = 2; c.weightx = 0;
-        panel.add(browseOutput, c);
+        bottomPanel.add(browseOutput, c);
 
-        progressBar = new JProgressBar(0, 100);
-        progressBar.setStringPainted(true);
-        progressBar.setString("Idle");
-        c.gridx = 0; c.gridy = 2;
-        c.gridwidth = 3;
-        c.fill = GridBagConstraints.HORIZONTAL;
-        panel.add(progressBar, c);
+        convertProgressBar = new JProgressBar(0, 100);
+        convertProgressBar.setStringPainted(true);
+        convertProgressBar.setString("Idle");
+        c.gridx = 0; c.gridy = 1; c.gridwidth = 3;
+        bottomPanel.add(convertProgressBar, c);
 
-        convertButton = new JButton("Convert to PDF");
+        JPanel actionButtons = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
+        convertButton = new JButton("Convert All to PDF");
         convertButton.setEnabled(false);
-        convertButton.addActionListener(e -> startConvert());
+        convertButton.addActionListener(e -> startBatchConvert());
+
+        JButton restartButton = new JButton("Restart");
+        restartButton.addActionListener(e -> resetConvertTab());
+
+        actionButtons.add(convertButton);
+        actionButtons.add(restartButton);
+
+        c.gridy = 2; c.fill = GridBagConstraints.NONE; c.anchor = GridBagConstraints.CENTER;
+        bottomPanel.add(actionButtons, c);
+
+        convertStatusLabel = new JLabel("Add PPTX files to begin.", SwingConstants.CENTER);
+        convertStatusLabel.setForeground(Color.GRAY);
         c.gridy = 3;
-        c.fill = GridBagConstraints.NONE;
-        c.anchor = GridBagConstraints.CENTER;
-        panel.add(convertButton, c);
+        bottomPanel.add(convertStatusLabel, c);
 
-        statusLabel = new JLabel("Select a PPTX file to begin.", SwingConstants.CENTER);
-        statusLabel.setForeground(Color.GRAY);
-        c.gridy = 4;
-        panel.add(statusLabel, c);
-
+        panel.add(bottomPanel, BorderLayout.SOUTH);
         return panel;
     }
 
-    private void browseInput() {
+    private void addPptxFiles() {
         JFileChooser chooser = new JFileChooser();
         chooser.setFileFilter(new FileNameExtensionFilter("PowerPoint Files (*.pptx)", "pptx"));
+        chooser.setMultiSelectionEnabled(true);
 
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File selected = chooser.getSelectedFile();
-            inputField.setText(selected.getAbsolutePath());
+            for (File f : chooser.getSelectedFiles()) convertListModel.addElement(f.getAbsolutePath());
 
-            String autoOutput = selected.getAbsolutePath()
-                    .replaceAll("(?i)\\.pptx$", ".pdf");
-            outputField.setText(autoOutput);
-
-            convertButton.setEnabled(true);
-            statusLabel.setText("Ready to convert.");
-            statusLabel.setForeground(Color.GRAY);
-            progressBar.setValue(0);
-            progressBar.setString("Idle");
-            log.info("Input selected: {}", selected.getAbsolutePath());
-        }
-    }
-
-    private void browseOutput() {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setFileFilter(new FileNameExtensionFilter("PDF Files (*.pdf)", "pdf"));
-        chooser.setDialogTitle("Save PDF as...");
-
-        if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            String path = chooser.getSelectedFile().getAbsolutePath();
-            if (!path.toLowerCase().endsWith(".pdf")) {
-                path += ".pdf";
+            if (convertOutputDirField.getText().isEmpty()) {
+                convertOutputDirField.setText(new File(convertListModel.get(0)).getParent());
             }
-            outputField.setText(path);
-            log.info("Output selected: {}", path);
+            refreshConvertButton();
         }
     }
 
-    private void startConvert() {
-        String input  = inputField.getText().trim();
-        String output = outputField.getText().trim();
-
-        if (input.isEmpty() || output.isEmpty()) {
-            showError("Please select input and output files.");
-            return;
+    private void browseOutputDir() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            convertOutputDirField.setText(chooser.getSelectedFile().getAbsolutePath());
+            refreshConvertButton();
         }
+    }
+
+    private void refreshConvertButton() {
+        boolean ready = convertListModel.size() >= 1 && !convertOutputDirField.getText().isEmpty();
+        convertButton.setEnabled(ready);
+        convertStatusLabel.setText(convertListModel.size() + " file(s) queued.");
+        convertStatusLabel.setForeground(Color.GRAY);
+    }
+
+    private void startBatchConvert() {
+        java.util.List<String> inputs = new java.util.ArrayList<>();
+        for (int i = 0; i < convertListModel.size(); i++) inputs.add(convertListModel.get(i));
+
+        String outputDir = convertOutputDirField.getText().trim();
+        int total        = inputs.size();
 
         convertButton.setEnabled(false);
-        progressBar.setValue(0);
-        progressBar.setString("Starting...");
-        statusLabel.setText("Converting...");
-        statusLabel.setForeground(Color.BLUE);
-
-        log.info("Conversion started: {} -> {}", input, output);
+        convertProgressBar.setValue(0);
+        convertProgressBar.setString("Starting...");
+        convertStatusLabel.setText("Converting 0 of " + total + "...");
+        convertStatusLabel.setForeground(Color.BLUE);
 
         SwingWorker<Void, int[]> worker = new SwingWorker<>() {
 
             @Override
             protected Void doInBackground() throws Exception {
                 PptxToPdfConverter converter = new PptxToPdfConverter();
-                converter.convert(input, output, (current, total) -> {
-                    publish(new int[]{current, total});
-                });
+                for (int i = 0; i < inputs.size(); i++) {
+                    String input    = inputs.get(i);
+                    String fileName = new File(input).getName().replaceAll("(?i)\\.pptx$", ".pdf");
+                    String output   = outputDir + File.separator + fileName;
+                    final int fi    = i + 1;
+
+                    converter.convert(input, output, (cur, tot) -> {
+                        int pct = (int)(((fi - 1 + cur / (double) tot) / total) * 100);
+                        publish(new int[]{fi, total, pct, cur, tot});
+                    });
+                }
                 return null;
             }
 
             @Override
-            protected void process(java.util.List<int[]> chunks) {
-                int[] latest = chunks.get(chunks.size() - 1);
-                int current = latest[0];
-                int total   = latest[1];
-                int percent = (int) ((current / (double) total) * 100);
-
-                progressBar.setValue(percent);
-                progressBar.setString("Slide " + current + " / " + total);
-                statusLabel.setText("Rendering slide " + current + " of " + total + "...");
+            protected void process(List<int[]> chunks) {
+                int[] l = chunks.get(chunks.size() - 1);
+                convertProgressBar.setValue(l[2]);
+                convertProgressBar.setString("File " + l[0] + "/" + l[1] + " — Slide " + l[3] + "/" + l[4]);
+                convertStatusLabel.setText("Converting file " + l[0] + " of " + l[1] + "...");
             }
 
             @Override
             protected void done() {
                 try {
                     get();
-                    progressBar.setValue(100);
-                    progressBar.setString("Complete!");
-                    statusLabel.setText("Done! Saved to: " + output);
-                    statusLabel.setForeground(new Color(0, 140, 0));
-                    log.info("Conversion finished successfully.");
+                    convertProgressBar.setValue(100);
+                    convertProgressBar.setString("Complete!");
+                    convertStatusLabel.setText("Done! " + total + " file(s) saved to: " + outputDir);
+                    convertStatusLabel.setForeground(new Color(0, 140, 0));
                 } catch (Exception ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                     String msg = cause.getMessage() != null ? cause.getMessage() : cause.getClass().getSimpleName();
-                    showError(msg);
-                    progressBar.setValue(0);
-                    progressBar.setString("Failed");
-                    log.error("Conversion failed: {}", msg);
+                    convertProgressBar.setString("Failed");
+                    convertStatusLabel.setText("Error: " + msg);
+                    convertStatusLabel.setForeground(Color.RED);
+                    JOptionPane.showMessageDialog(MainFrame.this, msg, "Error", JOptionPane.ERROR_MESSAGE);
                 } finally {
                     convertButton.setEnabled(true);
                 }
@@ -192,9 +207,13 @@ public class MainFrame extends JFrame {
         worker.execute();
     }
 
-    private void showError(String message) {
-        statusLabel.setText("Error: " + message);
-        statusLabel.setForeground(Color.RED);
-        JOptionPane.showMessageDialog(this, message, "Error", JOptionPane.ERROR_MESSAGE);
+    private void resetConvertTab() {
+        convertListModel.clear();
+        convertOutputDirField.setText("");
+        convertProgressBar.setValue(0);
+        convertProgressBar.setString("Idle");
+        convertStatusLabel.setText("Add PPTX files to begin.");
+        convertStatusLabel.setForeground(Color.GRAY);
+        convertButton.setEnabled(false);
     }
 }

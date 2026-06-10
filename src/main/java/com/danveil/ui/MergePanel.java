@@ -30,39 +30,37 @@ public class MergePanel extends JPanel {
 
     private void initComponents() {
 
-        // --- Top: file list ---
+        // --- File list ---
         listModel = new DefaultListModel<>();
         fileList = new JList<>(listModel);
         fileList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        fileList.setToolTipText("Add PDF files to merge. Use Move Up/Down to reorder.");
 
         JScrollPane scrollPane = new JScrollPane(fileList);
         scrollPane.setBorder(BorderFactory.createTitledBorder("PDF Files to Merge (in order)"));
-        scrollPane.setPreferredSize(new Dimension(0, 180));
+        scrollPane.setPreferredSize(new Dimension(0, 160));
         add(scrollPane, BorderLayout.CENTER);
 
-        // --- Right: list control buttons ---
+        // --- Right: list buttons ---
         JPanel listButtons = new JPanel(new GridLayout(4, 1, 0, 6));
         listButtons.setBorder(BorderFactory.createEmptyBorder(20, 0, 0, 0));
 
-        JButton addButton = new JButton("Add PDF");
+        JButton addButton    = new JButton("Add PDF");
         JButton removeButton = new JButton("Remove");
-        JButton moveUpButton = new JButton("Move Up");
-        JButton moveDownButton = new JButton("Move Down");
+        JButton moveUp       = new JButton("Move Up");
+        JButton moveDown     = new JButton("Move Down");
 
         addButton.addActionListener(e -> addFiles());
         removeButton.addActionListener(e -> removeSelected());
-        moveUpButton.addActionListener(e -> moveUp());
-        moveDownButton.addActionListener(e -> moveDown());
+        moveUp.addActionListener(e -> moveUp());
+        moveDown.addActionListener(e -> moveDown());
 
         listButtons.add(addButton);
         listButtons.add(removeButton);
-        listButtons.add(moveUpButton);
-        listButtons.add(moveDownButton);
-
+        listButtons.add(moveUp);
+        listButtons.add(moveDown);
         add(listButtons, BorderLayout.EAST);
 
-        // --- Bottom: output + merge button + status ---
+        // --- Bottom ---
         JPanel bottomPanel = new JPanel(new GridBagLayout());
         GridBagConstraints c = new GridBagConstraints();
         c.insets = new Insets(6, 4, 6, 4);
@@ -84,21 +82,28 @@ public class MergePanel extends JPanel {
 
         // Progress bar
         progressBar = new JProgressBar();
-        progressBar.setIndeterminate(false);
-        progressBar.setString("Idle");
         progressBar.setStringPainted(true);
-        c.gridx = 0; c.gridy = 1;
-        c.gridwidth = 3;
+        progressBar.setString("Idle");
+        c.gridx = 0; c.gridy = 1; c.gridwidth = 3;
         bottomPanel.add(progressBar, c);
 
-        // Merge button
+        // Buttons row: Merge + Restart
+        JPanel actionButtons = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
+
         mergeButton = new JButton("Merge PDFs");
         mergeButton.setEnabled(false);
         mergeButton.addActionListener(e -> startMerge());
+
+        JButton restartButton = new JButton("Restart");
+        restartButton.addActionListener(e -> resetPanel());
+
+        actionButtons.add(mergeButton);
+        actionButtons.add(restartButton);
+
         c.gridy = 2;
         c.fill = GridBagConstraints.NONE;
         c.anchor = GridBagConstraints.CENTER;
-        bottomPanel.add(mergeButton, c);
+        bottomPanel.add(actionButtons, c);
 
         // Status label
         statusLabel = new JLabel("Add at least 2 PDF files to begin.", SwingConstants.CENTER);
@@ -116,17 +121,21 @@ public class MergePanel extends JPanel {
         chooser.setDialogTitle("Select PDF files to merge");
 
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            for (File f : chooser.getSelectedFiles()) {
-                listModel.addElement(f.getAbsolutePath());
-                log.info("Added to merge list: {}", f.getAbsolutePath());
-            }
-            refreshMergeButton();
+            File[] selected = chooser.getSelectedFiles();
 
-            // Auto-fill output path based on first file's folder
+            // Fix: add ALL selected files individually
+            for (File f : selected) {
+                listModel.addElement(f.getAbsolutePath());
+                log.info("Added: {}", f.getAbsolutePath());
+            }
+
+            // Auto-fill output path
             if (outputField.getText().isEmpty() && listModel.size() > 0) {
                 File first = new File(listModel.get(0));
                 outputField.setText(first.getParent() + File.separator + "merged.pdf");
             }
+
+            refreshMergeButton();
         }
     }
 
@@ -163,17 +172,18 @@ public class MergePanel extends JPanel {
 
         if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
             String path = chooser.getSelectedFile().getAbsolutePath();
-            if (!path.toLowerCase().endsWith(".pdf")) {
-                path += ".pdf";
-            }
+            if (!path.toLowerCase().endsWith(".pdf")) path += ".pdf";
             outputField.setText(path);
+            refreshMergeButton();
         }
     }
 
     private void refreshMergeButton() {
-        mergeButton.setEnabled(listModel.size() >= 2 && !outputField.getText().isEmpty());
+        boolean ready = listModel.size() >= 2 && !outputField.getText().isEmpty();
+        mergeButton.setEnabled(ready);
+
         if (listModel.size() < 2) {
-            statusLabel.setText("Add at least 2 PDF files to begin.");
+            statusLabel.setText("Add at least 2 PDF files to begin. (" + listModel.size() + " added)");
             statusLabel.setForeground(Color.GRAY);
         } else {
             statusLabel.setText("Ready. " + listModel.size() + " files queued.");
@@ -183,15 +193,6 @@ public class MergePanel extends JPanel {
 
     private void startMerge() {
         String output = outputField.getText().trim();
-
-        if (listModel.size() < 2) {
-            showError("Add at least 2 PDF files.");
-            return;
-        }
-        if (output.isEmpty()) {
-            showError("Please select an output file.");
-            return;
-        }
 
         List<String> paths = new ArrayList<>();
         for (int i = 0; i < listModel.size(); i++) {
@@ -208,8 +209,7 @@ public class MergePanel extends JPanel {
 
             @Override
             protected Void doInBackground() throws Exception {
-                PdfMerger merger = new PdfMerger();
-                merger.merge(paths, output);
+                new PdfMerger().merge(paths, output);
                 return null;
             }
 
@@ -222,13 +222,14 @@ public class MergePanel extends JPanel {
                     progressBar.setString("Complete!");
                     statusLabel.setText("Done! Saved to: " + output);
                     statusLabel.setForeground(new Color(0, 140, 0));
-                    log.info("Merge finished: {}", output);
                 } catch (Exception ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                     String msg = cause.getMessage() != null ? cause.getMessage() : cause.getClass().getSimpleName();
                     progressBar.setIndeterminate(false);
                     progressBar.setString("Failed");
-                    showError(msg);
+                    statusLabel.setText("Error: " + msg);
+                    statusLabel.setForeground(Color.RED);
+                    JOptionPane.showMessageDialog(MergePanel.this, msg, "Merge Error", JOptionPane.ERROR_MESSAGE);
                     log.error("Merge failed: {}", msg);
                 } finally {
                     mergeButton.setEnabled(true);
@@ -239,9 +240,15 @@ public class MergePanel extends JPanel {
         worker.execute();
     }
 
-    private void showError(String message) {
-        statusLabel.setText("Error: " + message);
-        statusLabel.setForeground(Color.RED);
-        JOptionPane.showMessageDialog(this, message, "Merge Error", JOptionPane.ERROR_MESSAGE);
+    private void resetPanel() {
+        listModel.clear();
+        outputField.setText("");
+        progressBar.setIndeterminate(false);
+        progressBar.setValue(0);
+        progressBar.setString("Idle");
+        statusLabel.setText("Add at least 2 PDF files to begin.");
+        statusLabel.setForeground(Color.GRAY);
+        mergeButton.setEnabled(false);
+        log.info("Merge panel reset.");
     }
 }

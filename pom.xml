@@ -40,6 +40,21 @@
       <version>5.4.1</version>
     </dependency>
 
+    <!-- Word (docx) to PDF -->
+    <dependency>
+        <groupId>org.docx4j</groupId>
+        <artifactId>docx4j-JAXB-ReferenceImpl</artifactId>
+        <version>11.4.9</version>
+    </dependency>
+    <dependency>
+        <groupId>org.docx4j</groupId>
+        <artifactId>docx4j-export-fo</artifactId>
+        <version>11.4.9</version>
+    </dependency>
+
+    <!-- Excel rendering (already have poi-ooxml, add this) -->
+    
+
     <!-- PDFBox -->
     <dependency>
       <groupId>org.apache.pdfbox</groupId>
